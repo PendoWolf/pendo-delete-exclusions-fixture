@@ -14,6 +14,24 @@ function loadTodos() {
   }
 }
 
+// Pendo Track Event: fires only when a task moves from done=false to done=true.
+// Called from the event handler (not the state updater) so StrictMode's double
+// invocation of updaters can't fire it twice. Task text is never sent (may be PII).
+function trackTaskCompleted(nextTodos, filter) {
+  if (typeof window === 'undefined' || !window.pendo?.track) return
+  try {
+    const remaining = nextTodos.filter((todo) => !todo.done).length
+    window.pendo.track('task_completed', {
+      remaining,
+      completedCount: nextTodos.length - remaining,
+      totalTasks: nextTodos.length,
+      filter,
+    })
+  } catch {
+    // Tracking must never break the app.
+  }
+}
+
 function App() {
   const [todos, setTodos] = useState(loadTodos)
   const [text, setText] = useState('')
@@ -37,6 +55,14 @@ function App() {
   }
 
   function toggleTodo(id) {
+    const target = todos.find((todo) => todo.id === id)
+    if (target && !target.done) {
+      trackTaskCompleted(
+        todos.map((todo) => (todo.id === id ? { ...todo, done: true } : todo)),
+        filter,
+      )
+    }
+
     setTodos((current) =>
       current.map((todo) =>
         todo.id === id ? { ...todo, done: !todo.done } : todo,
